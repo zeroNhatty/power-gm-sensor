@@ -21,6 +21,7 @@ set(IMGUI_SOURCES
 set(RLIMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib/rlImGui")
 set(RLIMGUI_SOURCES
         ${RLIMGUI_DIR}/rlImGui.cpp
+        values.h
 )
 
 add_executable(${PROJECT_NAME}
