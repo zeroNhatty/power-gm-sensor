@@ -3,6 +3,7 @@
 #include "rlImGui.h"
 #include "values.h"
 #include "httplib.h"
+#include "imgui_internal.h"
 #include "json.hpp"
 
 class Node {
@@ -11,10 +12,12 @@ public:
     std::string location;
     NodeStatus status;
 
-    void static draw_node(NodeStatus status) {
+    bool static draw_node(int64_t  node_id, NodeStatus status) {
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
         ImVec2 p = ImGui::GetCursorScreenPos();
+
+        bool is_clicked = false;
 
         ImColor color;
         switch (status) {
@@ -30,10 +33,23 @@ public:
         }
 
         draw_list->AddCircleFilled(ImVec2(p.x + 50, p.y + 50), 30.0f, color);
+        std::string button_id = "node_click_" + std::to_string(node_id);
 
+        if (ImGui::InvisibleButton(button_id.c_str(), ImVec2(100, 100))) {
+            is_clicked = true;
+        }
 
-        ImGui::Dummy(ImVec2(200, 200));
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+            draw_list->AddCircle(ImVec2(p.x + 50, p.y + 50), 34.0f, ImColor(255, 255, 255, 150), 0, 2.0f);
+        }
+
+        return is_clicked;
     }
+};
+
+class NodeRelations {
+
 };
 
 std::vector<Node> sensor_nodes;
@@ -81,11 +97,14 @@ bool get_node_collection() {
 
 
 int main() {
-    /*
-    InitWindow(1280, 720, "Power Grid Monitor Node Simulator");
+    InitWindow(1280, 720, "PGM Node Simulator");
     SetTargetFPS(60);
 
     rlImGuiSetup(true);
+
+    bool fetched_node_collection = get_node_collection();
+    int selected_node_id = -1;
+    Node selected_node;
 
     while (!WindowShouldClose()) {
         BeginDrawing();
@@ -93,11 +112,65 @@ int main() {
         rlImGuiBegin();
 
         ImGui::Begin("Sensor Status Dashboard");
-        ImGui::Text("Testing worked");
-        ImGui::Button("test");
-        Nodes::draw_node(ACTIVE);
-        Nodes::draw_node(INACTIVE);
-        Nodes::draw_node(BEING_MAINTAINED);
+        if (!fetched_node_collection) {
+            ImGui::TextColored(COLOR_NODE_INACTIVE, "Couldn't Retrieve Nodes!");
+        }
+        else {
+            ImGui::BeginGroup();
+            int colo = 1;
+            for (const auto& node : sensor_nodes) {
+                if (Node::draw_node(node.node_id, node.status)) {
+                    selected_node_id = node.node_id;
+                    selected_node = node;
+                }
+                if (colo < 5) {
+                    ImGui::SameLine();
+                    colo++;
+                }
+                else
+                    colo = 1;
+            }
+            ImGui::EndGroup();
+
+            ImGui::SameLine();
+            ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+            ImGui::SameLine();
+
+            if (selected_node_id != -1) {
+                ImGui::BeginChild("NodeDetailsPanel", ImVec2(300, 200));
+
+                ImGui::Text("--- Node Details ---");
+
+                std::string id_text = "ID: " + std::to_string(selected_node.node_id);
+                ImGui::Text("%s", id_text.c_str());
+
+                ImGui::Text("Location: %s", selected_node.location.c_str());;
+
+                ImGui::Text("Change Status:");
+
+                if (ImGui::RadioButton("Active", selected_node.status == ACTIVE)) {
+                    selected_node.status = ACTIVE;
+                }
+                if (ImGui::RadioButton("Inactive", selected_node.status == INACTIVE)) {
+                    selected_node.status = INACTIVE;
+                }
+                if (ImGui::RadioButton("Being Maintained", selected_node.status == BEING_MAINTAINED)) {
+                    selected_node.status = BEING_MAINTAINED;
+                }
+
+                for (auto& node : sensor_nodes) {
+                    if (node.node_id == selected_node_id) {
+                        node.status = selected_node.status;
+                        break;
+                    }
+                }
+                if (ImGui::Button("Close Details")) {
+                    selected_node_id = -1;
+                }
+
+                ImGui::EndChild();
+            }
+        }
         ImGui::End();
 
         rlImGuiEnd();
@@ -106,12 +179,6 @@ int main() {
 
     rlImGuiShutdown();
     CloseWindow();
-*/
-
-    if (!get_node_collection()) {
-        return 1;
-    }
-
 
     std::string json_data = R"({"id":42393,"location":"Musk"})";
 
@@ -125,9 +192,6 @@ int main() {
         std::cout << "Connection Error: " << res.error() << std::endl;
     }
 
-    for (auto node: sensor_nodes) {
-        std::cout << node.node_id << std::endl;
-    }
     return 0;
 }
 
