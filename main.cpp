@@ -49,10 +49,14 @@ public:
 };
 
 class NodeRelations {
-
+public:
+    int64_t relation_id;
+    Node* child_node = nullptr;
+    Node* parent_node = nullptr;
 };
 
 std::vector<Node> sensor_nodes;
+std::vector<NodeRelations> sensor_nodes_relationship;
 httplib::Client cli("http://localhost:5050");
 
 
@@ -69,6 +73,14 @@ NodeStatus resolve_status(const std::string& response_status) {
     return INACTIVE;
 }
 
+Node* findNode(int64_t target_node) {
+    for (auto& node: sensor_nodes) {
+        if (target_node == node.node_id)
+            return &node;
+    }
+    return nullptr;
+}
+
 bool get_node_collection() {
     if (auto res = cli.Get("/node_collection")) {
         if (res->status == 200) {
@@ -76,7 +88,7 @@ bool get_node_collection() {
             if (j.is_array() && !j.empty()) {
                 for (const auto& item : j) {
                     Node n;
-                    n.node_id  = item["id"].get<int64_t>();
+                    n.node_id= item["id"].get<int64_t>();
                     n.location = item["location"].get<std::string>();
                     n.status   = resolve_status(item["status"].get<std::string>());
 
@@ -94,6 +106,33 @@ bool get_node_collection() {
     }
     return false;
 }
+
+bool get_node_relationship_collection() {
+    if (auto res = cli.Get("/node_relation_collection")) {
+        if (res->status == 200) {
+            nlohmann::json j = nlohmann::json::parse(res->body);
+            if (j.is_array() && !j.empty()) {
+                for (const auto& item : j) {
+                    NodeRelations n;
+                    n.relation_id = item["id"].get<int64_t>();
+                    n.child_node = findNode(item["node_id"].get<int64_t>());
+                    n.parent_node = findNode(item["parent_node_id"].get<int64_t>());
+
+                    sensor_nodes_relationship.push_back(n);
+                }
+                return true;
+            }
+            else {
+                std::cout << "Empty or invalid response array!" << std::endl;
+            }
+        }
+        else {
+            std::cout << "Couldn't get node relationship collection! Status: " << res->status <<std::endl;
+        }
+    }
+    return false;
+}
+
 
 
 int main() {
@@ -182,7 +221,7 @@ int main() {
 
     std::string json_data = R"({"id":42393,"location":"Musk"})";
 
-    if (auto res = cli.Post("/decode", json_data, "application/json")) {
+    if (auto res = cli.Post("/ping", json_data, "application/json")) {
         if (res->status == 200) {
             std::cout << "Response: " << res->body << std::endl;
         } else {
@@ -191,6 +230,13 @@ int main() {
     } else {
         std::cout << "Connection Error: " << res.error() << std::endl;
     }
+
+    get_node_relationship_collection();
+        for (auto data: sensor_nodes_relationship) {
+            std::cout << "relation id : "  << data.relation_id << " | child id : "
+             << data.child_node->node_id << " | parent id : " << data.parent_node->node_id << std::endl;
+        }
+
 
     return 0;
 }
