@@ -1,5 +1,18 @@
 # power-g-sensors
-Is a simulator for the nodes for [power-gm]()
+Is a simulator for the nodes for [power-gm](https://github.com/zeroNhatty/power-gm)
+
+Run:
+```
+mkdir build
+cd build
+
+cmake ..
+
+cmake --build .
+
+./power_gm_sensor
+```
+
 
 ## DEMO
 
