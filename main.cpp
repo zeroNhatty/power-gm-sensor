@@ -152,6 +152,20 @@ void ping(Node* node) {
 
 void notify_being_maintained_status(Node* node) {
     //TODO: firing being_maintained status
+    nlohmann::json json_payload;
+    json_payload["id"] = node->node_id;
+    json_payload["location"] = node->location;
+
+    if (auto res = cli.Post("/ping/maintenance", json_payload.dump(), "application/json")) {
+        if (res->status == 200) {
+            std::cout << "Node " << node->node_id << " updated to " << node->status << std::endl;
+        }
+        else {
+            std::cout << "Status update failed: " << res->status << std::endl;
+        }
+    } else {
+        std::cout << "Ping execution network error" << std::endl;
+    }
 }
 
 int main() {
