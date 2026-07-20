@@ -58,6 +58,7 @@ public:
 std::vector<Node> sensor_nodes;
 std::vector<NodeRelations> sensor_nodes_relationship;
 httplib::Client cli("http://localhost:5050");
+httplib::Server svr;
 
 
 NodeStatus resolve_status(const std::string& response_status) {
@@ -83,7 +84,7 @@ Node* findNode(int64_t target_node) {
 
 bool get_node_collection() {
     if (auto res = cli.Get("/node_collection")) {
-        if (res->status == 200) {
+        if (res->status == httplib::StatusCode::OK_200) {
             nlohmann::json j = nlohmann::json::parse(res->body);
             if (j.is_array() && !j.empty()) {
                 for (const auto& item : j) {
@@ -109,7 +110,7 @@ bool get_node_collection() {
 
 bool get_node_relationship_collection() {
     if (auto res = cli.Get("/node_relation_collection")) {
-        if (res->status == 200) {
+        if (res->status == httplib::StatusCode::OK_200) {
             nlohmann::json j = nlohmann::json::parse(res->body);
             if (j.is_array() && !j.empty()) {
                 for (const auto& item : j) {
@@ -133,17 +134,37 @@ bool get_node_relationship_collection() {
     return false;
 }
 
+void ping(Node* node) {
+    nlohmann::json json_payload;
+    json_payload["id"] = node->node_id;
+    json_payload["location"] = node->location;
 
+    if (auto res = cli.Post("/ping", json_payload.dump(), "application/json")) {
+        if (res->status == 200) {
+            std::cout << "Node " << node->node_id << " boink (Status 200)" << std::endl;
+        } else {
+            std::cout << "Ping failed status: " << res->status << std::endl;
+        }
+    } else {
+        std::cout << "Ping execution network error" << std::endl;
+    }
+}
+
+void notify_being_maintained_status(Node* node) {
+    //TODO: firing being_maintained status
+}
 
 int main() {
     InitWindow(1280, 720, "PGM Node Simulator");
     SetTargetFPS(60);
-
     rlImGuiSetup(true);
 
     bool fetched_node_collection = get_node_collection();
     int selected_node_id = -1;
     Node selected_node;
+
+    // timer
+    auto last_ping_time = std::chrono::steady_clock::now();
 
     while (!WindowShouldClose()) {
         BeginDrawing();
@@ -165,48 +186,53 @@ int main() {
                 if (colo < 5) {
                     ImGui::SameLine();
                     colo++;
-                }
-                else
+                } else {
                     colo = 1;
+                }
             }
             ImGui::EndGroup();
+
+            // Check if 3 seconds have passed before looping through active elements
+            auto current_time = std::chrono::steady_clock::now();
+            if (std::chrono::duration_cast<std::chrono::seconds>(current_time - last_ping_time).count() >= 3) {
+
+                for (auto& node : sensor_nodes) {
+                    if (node.status == ACTIVE) {
+                        ping(&node);
+                    }
+                }
+                last_ping_time = current_time;
+            }
 
             ImGui::SameLine();
             ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
             ImGui::SameLine();
 
             if (selected_node_id != -1) {
-                ImGui::BeginChild("NodeDetailsPanel", ImVec2(300, 200));
-
+                ImGui::BeginChild("NodeDetailsPanel", ImVec2(300, 250), ImGuiChildFlags_Borders);
                 ImGui::Text("--- Node Details ---");
 
                 std::string id_text = "ID: " + std::to_string(selected_node.node_id);
                 ImGui::Text("%s", id_text.c_str());
-
-                ImGui::Text("Location: %s", selected_node.location.c_str());;
+                ImGui::Text("Location: %s", selected_node.location.c_str());
 
                 ImGui::Text("Change Status:");
-
-                if (ImGui::RadioButton("Active", selected_node.status == ACTIVE)) {
-                    selected_node.status = ACTIVE;
-                }
-                if (ImGui::RadioButton("Inactive", selected_node.status == INACTIVE)) {
-                    selected_node.status = INACTIVE;
-                }
+                if (ImGui::RadioButton("Active", selected_node.status == ACTIVE)) { selected_node.status = ACTIVE; }
+                if (ImGui::RadioButton("Inactive", selected_node.status == INACTIVE)) { selected_node.status = INACTIVE; }
                 if (ImGui::RadioButton("Being Maintained", selected_node.status == BEING_MAINTAINED)) {
                     selected_node.status = BEING_MAINTAINED;
+                    notify_being_maintained_status(&selected_node);
                 }
 
+                // Synchronize selection state edits back down into our array cache container
                 for (auto& node : sensor_nodes) {
                     if (node.node_id == selected_node_id) {
                         node.status = selected_node.status;
                         break;
                     }
                 }
-                if (ImGui::Button("Close Details")) {
-                    selected_node_id = -1;
-                }
 
+                if (ImGui::Button("Close Details")) { selected_node_id = -1; }
                 ImGui::EndChild();
             }
         }
@@ -218,26 +244,5 @@ int main() {
 
     rlImGuiShutdown();
     CloseWindow();
-
-    std::string json_data = R"({"id":42393,"location":"Musk"})";
-
-    if (auto res = cli.Post("/ping", json_data, "application/json")) {
-        if (res->status == 200) {
-            std::cout << "Response: " << res->body << std::endl;
-        } else {
-            std::cout << "HTTP Error: " << res->status << std::endl;
-        }
-    } else {
-        std::cout << "Connection Error: " << res.error() << std::endl;
-    }
-
-    get_node_relationship_collection();
-        for (auto data: sensor_nodes_relationship) {
-            std::cout << "relation id : "  << data.relation_id << " | child id : "
-             << data.child_node->node_id << " | parent id : " << data.parent_node->node_id << std::endl;
-        }
-
-
     return 0;
 }
-
