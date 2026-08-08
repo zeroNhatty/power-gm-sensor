@@ -5,82 +5,10 @@
 #include "httplib.h"
 #include "imgui_internal.h"
 #include "json.hpp"
+#include "node.h"
 
-class Node {
-public:
-    int64_t node_id;
-    std::string location;
-    NodeStatus status;
-
-    bool static draw_node(int64_t  node_id, NodeStatus status) {
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-
-        ImVec2 p = ImGui::GetCursorScreenPos();
-
-        bool is_clicked = false;
-
-        ImColor color;
-        switch (status) {
-            case ACTIVE:
-                color = COLOR_NODE_ACTIVE;
-                break;
-            case INACTIVE:
-                color = COLOR_NODE_INACTIVE;
-                break;
-            case BEING_MAINTAINED:
-                color = COLOR_NODE_BEING_MAINTAINED;
-                break;
-        }
-
-        draw_list->AddCircleFilled(ImVec2(p.x + 50, p.y + 50), 30.0f, color);
-        std::string button_id = "node_click_" + std::to_string(node_id);
-
-        if (ImGui::InvisibleButton(button_id.c_str(), ImVec2(100, 100))) {
-            is_clicked = true;
-        }
-
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-            draw_list->AddCircle(ImVec2(p.x + 50, p.y + 50), 34.0f, ImColor(255, 255, 255, 150), 0, 2.0f);
-        }
-
-        return is_clicked;
-    }
-};
-
-class NodeRelations {
-public:
-    int64_t relation_id;
-    Node* child_node = nullptr;
-    Node* parent_node = nullptr;
-};
-
-std::vector<Node> sensor_nodes;
-std::vector<NodeRelations> sensor_nodes_relationship;
 httplib::Client cli("http://localhost:5050");
 httplib::Server svr;
-
-
-NodeStatus resolve_status(const std::string& response_status) {
-    if (response_status == "active") {
-        return ACTIVE;
-    }
-    if (response_status == "inactive") {
-        return INACTIVE;
-    }
-    if (response_status == "being_maintained") {
-        return BEING_MAINTAINED;
-    }
-    return INACTIVE;
-}
-
-Node* findNode(int64_t target_node) {
-    for (auto& node: sensor_nodes) {
-        if (target_node == node.node_id)
-            return &node;
-    }
-    return nullptr;
-}
 
 bool get_node_collection() {
     if (auto res = cli.Get("/node_collection")) {
@@ -150,25 +78,18 @@ void ping(Node* node) {
     }
 }
 
-/*
-void notify_being_maintained_status(Node* node) {
-    //TODO: firing being_maintained status
-    nlohmann::json json_payload;
-    json_payload["id"] = node->node_id;
-    json_payload["location"] = node->location;
-
-    if (auto res = cli.Post("/ping/maintenance", json_payload.dump(), "application/json")) {
-        if (res->status == 200) {
-            std::cout << "Node " << node->node_id << " updated to " << node->status << std::endl;
+void handle_relational_kill(Node* inactiveNode) {
+    for (auto& node : sensor_nodes_relationship) {
+        if (inactiveNode->node_id == node.parent_node->node_id) {
+            for (auto& singular_node : sensor_nodes) {
+                if (singular_node.node_id == node.child_node->node_id) {
+                    singular_node.status = INACTIVE;
+                }
+            }
         }
-        else {
-            std::cout << "Status update failed: " << res->status << std::endl;
-        }
-    } else {
-        std::cout << "Ping execution network error" << std::endl;
     }
 }
-*/
+
 int main() {
     InitWindow(1280, 720, "PGM Node Simulator");
     SetTargetFPS(60);
@@ -233,7 +154,10 @@ int main() {
 
                 ImGui::Text("Change Status:");
                 if (ImGui::RadioButton("Active", selected_node.status == ACTIVE)) { selected_node.status = ACTIVE; }
-                if (ImGui::RadioButton("Inactive", selected_node.status == INACTIVE)) { selected_node.status = INACTIVE; }
+                if (ImGui::RadioButton("Inactive", selected_node.status == INACTIVE)) {
+                    selected_node.status = INACTIVE;
+                    handle_relational_kill(&selected_node);
+                }
                 /* if (ImGui::RadioButton("Being Maintained", selected_node.status == BEING_MAINTAINED)) {
                     selected_node.status = BEING_MAINTAINED;
                     notify_being_maintained_status(&selected_node);

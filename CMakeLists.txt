@@ -23,6 +23,8 @@ set(RLIMGUI_SOURCES
         values.h
         ${LIB_DIR}/httplib.h
         ${LIB_DIR}/json.hpp
+        node.h
+        node.cpp
 )
 
 add_executable(${PROJECT_NAME}
