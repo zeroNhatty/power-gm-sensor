@@ -150,6 +150,7 @@ void ping(Node* node) {
     }
 }
 
+/*
 void notify_being_maintained_status(Node* node) {
     //TODO: firing being_maintained status
     nlohmann::json json_payload;
@@ -167,7 +168,7 @@ void notify_being_maintained_status(Node* node) {
         std::cout << "Ping execution network error" << std::endl;
     }
 }
-
+*/
 int main() {
     InitWindow(1280, 720, "PGM Node Simulator");
     SetTargetFPS(60);
@@ -233,10 +234,10 @@ int main() {
                 ImGui::Text("Change Status:");
                 if (ImGui::RadioButton("Active", selected_node.status == ACTIVE)) { selected_node.status = ACTIVE; }
                 if (ImGui::RadioButton("Inactive", selected_node.status == INACTIVE)) { selected_node.status = INACTIVE; }
-                if (ImGui::RadioButton("Being Maintained", selected_node.status == BEING_MAINTAINED)) {
+                /* if (ImGui::RadioButton("Being Maintained", selected_node.status == BEING_MAINTAINED)) {
                     selected_node.status = BEING_MAINTAINED;
                     notify_being_maintained_status(&selected_node);
-                }
+                }*/
 
                 // Synchronize selection state edits back down into our array cache container
                 for (auto& node : sensor_nodes) {
