@@ -74,11 +74,14 @@ static void ping(Node* node) {
 void handle_relational_kill(int64_t inactiveNodeID) {
     auto parentNode = sensor_nodes_relation.find(inactiveNodeID);
     if (parentNode == sensor_nodes_relation.end()) {
-        std::cout << "Node has no Children!" << std::endl;
+        std::cout << "Node "<< inactiveNodeID <<" has no Children!" << std::endl;
         return;
     }
     for (int64_t node : parentNode->second) {
         findNode(node)->status = INACTIVE;
+
+        // this could be disasters but for a simple simulator I would say its fine
+        handle_relational_kill(node);
     }
 }
 
