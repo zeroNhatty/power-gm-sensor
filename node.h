@@ -7,6 +7,7 @@
 
 #include <string>
 #include <vector>
+#include <map>
 
 #include "values.h"
 
@@ -32,5 +33,5 @@ NodeStatus resolve_status(const std::string& response_status);
 Node* findNode(int64_t target_node);
 
 inline std::vector<Node> sensor_nodes;
-inline std::vector<NodeRelations> sensor_nodes_relationship;
+inline std::map<int64_t, std::vector<int64_t>> sensor_nodes_relation;
 #endif //POWER_GM_SENSOR_NODE_H

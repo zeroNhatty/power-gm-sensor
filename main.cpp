@@ -10,7 +10,7 @@
 httplib::Client cli("http://localhost:5050");
 httplib::Server svr;
 
-bool get_node_collection() {
+static bool get_node_collection() {
     if (auto res = cli.Get("/node_collection")) {
         if (res->status == httplib::StatusCode::OK_200) {
             nlohmann::json j = nlohmann::json::parse(res->body);
@@ -36,20 +36,14 @@ bool get_node_collection() {
     return false;
 }
 
-bool get_node_relationship_collection() {
+static void get_node_relationship_collection() {
     if (auto res = cli.Get("/node_relation_collection")) {
         if (res->status == httplib::StatusCode::OK_200) {
             nlohmann::json j = nlohmann::json::parse(res->body);
             if (j.is_array() && !j.empty()) {
                 for (const auto& item : j) {
-                    NodeRelations n;
-                    n.relation_id = item["id"].get<int64_t>();
-                    n.child_node = findNode(item["node_id"].get<int64_t>());
-                    n.parent_node = findNode(item["parent_node_id"].get<int64_t>());
-
-                    sensor_nodes_relationship.push_back(n);
+                    sensor_nodes_relation[item["parent_node_id"]].push_back(item["node_id"]);
                 }
-                return true;
             }
             else {
                 std::cout << "Empty or invalid response array!" << std::endl;
@@ -59,10 +53,9 @@ bool get_node_relationship_collection() {
             std::cout << "Couldn't get node relationship collection! Status: " << res->status <<std::endl;
         }
     }
-    return false;
 }
 
-void ping(Node* node) {
+static void ping(Node* node) {
     nlohmann::json json_payload;
     json_payload["id"] = node->node_id;
     json_payload["location"] = node->location;
@@ -78,15 +71,14 @@ void ping(Node* node) {
     }
 }
 
-void handle_relational_kill(Node* inactiveNode) {
-    for (auto& node : sensor_nodes_relationship) {
-        if (inactiveNode->node_id == node.parent_node->node_id) {
-            for (auto& singular_node : sensor_nodes) {
-                if (singular_node.node_id == node.child_node->node_id) {
-                    singular_node.status = INACTIVE;
-                }
-            }
-        }
+void handle_relational_kill(int64_t inactiveNodeID) {
+    auto parentNode = sensor_nodes_relation.find(inactiveNodeID);
+    if (parentNode == sensor_nodes_relation.end()) {
+        std::cout << "Node has no Children!" << std::endl;
+        return;
+    }
+    for (int64_t node : parentNode->second) {
+        findNode(node)->status = INACTIVE;
     }
 }
 
@@ -96,6 +88,7 @@ int main() {
     rlImGuiSetup(true);
 
     bool fetched_node_collection = get_node_collection();
+    get_node_relationship_collection();
     int selected_node_id = -1;
     Node selected_node;
 
@@ -156,13 +149,9 @@ int main() {
                 if (ImGui::RadioButton("Active", selected_node.status == ACTIVE)) { selected_node.status = ACTIVE; }
                 if (ImGui::RadioButton("Inactive", selected_node.status == INACTIVE)) {
                     selected_node.status = INACTIVE;
-                    handle_relational_kill(&selected_node);
+                    handle_relational_kill(selected_node.node_id);
                 }
-                /* if (ImGui::RadioButton("Being Maintained", selected_node.status == BEING_MAINTAINED)) {
-                    selected_node.status = BEING_MAINTAINED;
-                    notify_being_maintained_status(&selected_node);
-                }*/
-
+                
                 // Synchronize selection state edits back down into our array cache container
                 for (auto& node : sensor_nodes) {
                     if (node.node_id == selected_node_id) {
