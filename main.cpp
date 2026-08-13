@@ -78,7 +78,11 @@ void handle_relational_kill(int64_t inactiveNodeID) {
         return;
     }
     for (int64_t node : parentNode->second) {
-        findNode(node)->status = INACTIVE;
+
+        // so looping parent child relation doesn't crash the system
+        Node* fetchedNode = findNode(node);
+        if (fetchedNode->status == INACTIVE) continue;
+        fetchedNode->status = INACTIVE;
 
         // this could be disasters but for a simple simulator I would say its fine
         handle_relational_kill(node);
