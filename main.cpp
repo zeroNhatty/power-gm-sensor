@@ -12,6 +12,8 @@ httplib::Server svr;
 
 static bool get_node_collection() {
     if (auto res = cli.Get("/node_collection")) {
+        sensor_nodes.clear();
+        sensor_nodes.shrink_to_fit();
         if (res->status == httplib::StatusCode::OK_200) {
             nlohmann::json j = nlohmann::json::parse(res->body);
             if (j.is_array() && !j.empty()) {
@@ -71,7 +73,7 @@ static void ping(Node* node) {
     }
 }
 
-void handle_relational_kill(int64_t inactiveNodeID) {
+static void handle_relational_kill(int64_t inactiveNodeID) {
     auto parentNode = sensor_nodes_relation.find(inactiveNodeID);
     if (parentNode == sensor_nodes_relation.end()) {
         std::cout << "Node "<< inactiveNodeID <<" has no Children!" << std::endl;
@@ -89,6 +91,34 @@ void handle_relational_kill(int64_t inactiveNodeID) {
     }
 }
 
+static int selected_node_id = -1;
+static Node selected_node;
+
+static void draw_nodes(std::chrono::steady_clock::time_point& last_refresh_time) {
+    auto current_time = std::chrono::steady_clock::now();
+
+    if (std::chrono::duration_cast<std::chrono::seconds>(current_time - last_refresh_time).count() >= 10) {
+        get_node_collection();
+        last_refresh_time = current_time;
+    }
+
+    ImGui::BeginGroup();
+    int colo = 1;
+    for (const auto& node : sensor_nodes) {
+        if (Node::draw_node(node.node_id, node.status)) {
+            selected_node_id = node.node_id;
+            selected_node = node;
+        }
+        if (colo < 5) {
+            ImGui::SameLine();
+            colo++;
+        } else {
+            colo = 1;
+        }
+    }
+    ImGui::EndGroup();
+}
+
 int main() {
     InitWindow(1280, 720, "PGM Node Simulator");
     SetTargetFPS(60);
@@ -96,11 +126,10 @@ int main() {
 
     bool fetched_node_collection = get_node_collection();
     get_node_relationship_collection();
-    int selected_node_id = -1;
-    Node selected_node;
 
     // timer
     auto last_ping_time = std::chrono::steady_clock::now();
+    auto last_ping_time_list_refresh = std::chrono::steady_clock::now();
 
     while (!WindowShouldClose()) {
         BeginDrawing();
@@ -112,21 +141,7 @@ int main() {
             ImGui::TextColored(COLOR_NODE_INACTIVE, "Couldn't Retrieve Nodes!");
         }
         else {
-            ImGui::BeginGroup();
-            int colo = 1;
-            for (const auto& node : sensor_nodes) {
-                if (Node::draw_node(node.node_id, node.status)) {
-                    selected_node_id = node.node_id;
-                    selected_node = node;
-                }
-                if (colo < 5) {
-                    ImGui::SameLine();
-                    colo++;
-                } else {
-                    colo = 1;
-                }
-            }
-            ImGui::EndGroup();
+            draw_nodes(last_ping_time_list_refresh);
 
             // Check if 3 seconds have passed before looping through active elements
             auto current_time = std::chrono::steady_clock::now();
@@ -139,7 +154,6 @@ int main() {
                 }
                 last_ping_time = current_time;
             }
-
             ImGui::SameLine();
             ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
             ImGui::SameLine();
@@ -179,5 +193,7 @@ int main() {
 
     rlImGuiShutdown();
     CloseWindow();
+    sensor_nodes.clear();
+    sensor_nodes_relation.clear();
     return 0;
 }
