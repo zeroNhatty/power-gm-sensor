@@ -20,7 +20,8 @@ static bool get_node_collection() {
                 for (const auto& item : j) {
                     Node n;
                     n.node_id= item["id"].get<int64_t>();
-                    n.location = item["location"].get<std::string>();
+                    n.longitude = item["longitude"].get<double>();
+                    n.latitude  = item["latitude"].get<double>();
                     n.status   = resolve_status(item["status"].get<std::string>());
 
                     sensor_nodes.push_back(n);
@@ -60,16 +61,28 @@ static void get_node_relationship_collection() {
 static void ping(Node* node) {
     nlohmann::json json_payload;
     json_payload["id"] = node->node_id;
-    json_payload["location"] = node->location;
 
     if (auto res = cli.Post("/ping", json_payload.dump(), "application/json")) {
-        if (res->status == 200) {
-            std::cout << "Node " << node->node_id << " boink (Status 200)" << std::endl;
-        } else {
+        if (res->status != 200) {
             std::cout << "Ping failed status: " << res->status << std::endl;
         }
     } else {
         std::cout << "Ping execution network error" << std::endl;
+    }
+}
+
+static void notify_status_change(int64_t node_id, const std::string& status) {
+    nlohmann::json payload = {
+        {"id", node_id},
+        {"status", status}
+    };
+
+    if (auto res = cli.Post("/update_status", payload.dump(), "application/json")) {
+        if (res->status != 200) {
+            std::cout << "Failed to update status on Go server: " << res->status << std::endl;
+        }
+    } else {
+        std::cout << "Network error sending status update to Go server" << std::endl;
     }
 }
 
@@ -85,6 +98,9 @@ static void handle_relational_kill(int64_t inactiveNodeID) {
         Node* fetchedNode = findNode(node);
         if (fetchedNode->status == INACTIVE) continue;
         fetchedNode->status = INACTIVE;
+
+        //notify node death
+        notify_status_change(node, "inactive");
 
         // this could be disasters but for a simple simulator I would say its fine
         handle_relational_kill(node);
@@ -164,12 +180,19 @@ int main() {
 
                 std::string id_text = "ID: " + std::to_string(selected_node.node_id);
                 ImGui::Text("%s", id_text.c_str());
-                ImGui::Text("Location: %s", selected_node.location.c_str());
+                ImGui::Text("Latitude:  %.6f", selected_node.latitude);
+                ImGui::Text("Longitude: %.6f", selected_node.longitude);
 
                 ImGui::Text("Change Status:");
-                if (ImGui::RadioButton("Active", selected_node.status == ACTIVE)) { selected_node.status = ACTIVE; }
+                if (ImGui::RadioButton("Active", selected_node.status == ACTIVE)) {
+                    selected_node.status = ACTIVE;
+                    notify_status_change(selected_node.node_id, "active");
+                }
                 if (ImGui::RadioButton("Inactive", selected_node.status == INACTIVE)) {
                     selected_node.status = INACTIVE;
+                    //making sure we are killing it
+                    notify_status_change(selected_node.node_id, "inactive");
+
                     handle_relational_kill(selected_node.node_id);
                 }
                 

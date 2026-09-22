@@ -16,7 +16,8 @@
 class Node {
 public:
     int64_t node_id;
-    std::string location;
+    double longitude;
+    double latitude;
     NodeStatus status;
 
     bool static draw_node(int64_t  node_id, NodeStatus status);
