@@ -1,3 +1,5 @@
+# Active Development will be done in [pgms](https://github.com/zeroNhatty/pgms.git)
+
 # power-g-sensors
 Is a simulator for the nodes for [power-gm](https://github.com/zeroNhatty/power-gm)
 
